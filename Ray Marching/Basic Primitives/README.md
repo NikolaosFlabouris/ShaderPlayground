@@ -5,19 +5,19 @@ A [Shadron](http://www.arteryengine.com/shadron/) shader (based on GLSL) that di
 ![alt text](BasicPrimsControlWindow.PNG "Colour Control")
 
 ### Sphere
-![alt text](Sphere.gif "Sphere Primitive")
+![alt text](Images/Sphere.gif "Sphere Primitive")
 
 ### Cube
-![alt text](Sphere.gif "Cube Primitive")
+![alt text](Images/Cube.gif "Cube Primitive")
 
 ### Rectangular Box
-![alt text](Sphere.gif "Rectangular Box Primitive")
+![alt text](Images/RectangularBox.gif "Rectangular Box Primitive")
 
 ### Torus
-![alt text](Sphere.gif "Torus Primitive")
+![alt text](Torus.gif "Torus Primitive")
 
 ### Cylinder
-![alt text](Sphere.gif "Cylinder Primitive")
+![alt text](Cylinder.gif "Cylinder Primitive")
 
 ### Cone
-![alt text](Sphere.gif "Cone Primitive")
+![alt text](Cone.gif "Cone Primitive")

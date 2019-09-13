@@ -1,5 +1,23 @@
-# Basic Primitives
+# Basic Primitives (Shadron/GLSL)
 A [Shadron](http://www.arteryengine.com/shadron/) shader (based on GLSL) that displays different primitive shapes using ray marching. The shapes are lit by a singular point light. The environment and light colours can be controller using the Shadron GUI.
 
-## Examples
+### Shadron Colour Control
+![alt text](BasicPrimsControlWindow.PNG "Colour Control")
+
+### Sphere
 ![alt text](Sphere.gif "Sphere Primitive")
+
+### Cube
+![alt text](Sphere.gif "Cube Primitive")
+
+### Rectangular Box
+![alt text](Sphere.gif "Rectangular Box Primitive")
+
+### Torus
+![alt text](Sphere.gif "Torus Primitive")
+
+### Cylinder
+![alt text](Sphere.gif "Cylinder Primitive")
+
+### Cone
+![alt text](Sphere.gif "Cone Primitive")

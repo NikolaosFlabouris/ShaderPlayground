@@ -1,5 +1,6 @@
 // Basic Ray March
 
+#extension gif
 #version 140
 #include <math_constants>
 
@@ -238,3 +239,5 @@ glsl vec4 LoadPrimitive(vec2 fragCoord)
 }
 
 animation myShader = glsl(LoadPrimitive, WIDTH, HEIGHT);
+
+export gif(myShader, "Primative.gif", 30, 6.2831, true);

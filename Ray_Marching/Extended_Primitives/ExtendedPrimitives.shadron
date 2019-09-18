@@ -10,13 +10,39 @@ const int MAX_STEPS = 100;
 const float MAX_DIST = 100.0;
 const float SURF_DIST = 0.01;
 
-parameter int Object_Selector = 1 : range(1, 6);
+parameter int Object_Selector = 1 : range(1, 9);
 parameter vec3 Envrionment_Colour = vec3(1.0, 1.0, 1.0) : color();
 parameter vec3 Light_Colour = vec3(1.0, 1.0, 1.0) : color();
 
+///
+/// Elongates the shape in the x, y and z positions.
+/// \param pos - position in space.
+/// \param elongation - elongation factor in x, y, z directions.
+/// \return - new position in space.
 glsl vec3 ModifierElongate(vec3 pos, vec3 elongation)
 {
     return pos - clamp(pos, -elongation, elongation);
+}
+
+glsl float ModifierRound(float pos, float roundfactor)
+{
+    return pos - roundfactor;
+}
+
+glsl float ModifierOnion(float dist, float thickness)
+{
+    return abs(dist) - thickness;
+}
+
+glsl float ModifierExtrusion(vec3 pos, float sdf, float height)
+{
+    vec2 extrusion = vec2(sdf, abs(pos.z) - height);
+  	return min(max(extrusion.x, extrusion.y), 0.0) + length(max(extrusion, 0.0));
+}
+
+glsl vec2 ModifierRevolution(vec3 pos, float offset)
+{
+    return vec2(length(pos.xz) - offset, pos.y);
 }
 
 ///
@@ -46,35 +72,24 @@ glsl float GetDistToScene(vec3 pos)
         float sphereDist =  length(sphereTransformed) - sphereRadius;
         objDist = sphereDist;
         break;
-    case 2: // SQUARE BOX
+    case 2: // SQUARE BOX - Rounded
         // Rotation matrix, rotate over time.
         mat3 sqBoxRotation = mat3(cos(shadron_Time), 0.0, sin(shadron_Time), 
                         0.0, 1.0, 0.0,
                         -sin(shadron_Time), 0.0,  cos(shadron_Time));
-        vec3 sqBoxPos = vec3(0.0, 0.6, 7.0);
+        vec3 sqBoxPos = vec3(0.0, 0.9, 7.0);
         // x, y, z widths. All the same cause it is a square box!
         vec3 sqBoxWidth = vec3(0.6);
         // Apply transformation and then rotation to centre of box.
         vec3 sqBoxTransformed = sqBoxRotation * (pos - sqBoxPos);
         // Apply width which defines the box shape.
         vec3 sqBoxDist = abs(sqBoxTransformed) - sqBoxWidth;
-        objDist = length(max(sqBoxDist,0.0));
+        objDist = length(max(sqBoxDist, 0.0));
+        // Edge rounding factor.
+        float sqBoxRound = 0.3;
+        objDist = ModifierRound(objDist, sqBoxRound);
         break;
-    case 3: // RECTANGULAR BOX
-        // Rotation matrix, rotate over time.
-        mat3 rectBoxRotation = mat3(cos(shadron_Time), 0.0, sin(shadron_Time), 
-                        0.0, 1.0, 0.0,
-                        -sin(shadron_Time), 0.0,  cos(shadron_Time));
-        vec3 rectBoxPos = vec3(0.0, 0.4, 7.0);
-        // x, y, z widths. Different cause it aint a square box!
-        vec3 rectBoxWidth = vec3(0.6, 0.4, 1.8);
-        // Apply transformation and then rotation to centre of box.
-        vec3 rectboxTransformed = rectBoxRotation * (pos - rectBoxPos);
-        // Apply width which defines the box shape.
-        vec3 rectBoxDist = abs(rectboxTransformed) - rectBoxWidth;
-        objDist = length(max(rectBoxDist,0.0));
-        break;
-    case 4: // TORUS
+    case 3: // CAPPED TORUS - Double Onion
         // Rotation matrix, flip vertical then rotate over time.
         mat3 torusRotation = mat3(1.0, 0.0, 0.0,
                                   0.0, 0.0, -1.0,
@@ -83,7 +98,7 @@ glsl float GetDistToScene(vec3 pos)
                              mat3(cos(shadron_Time), 0.0, sin(shadron_Time), 
                                           0.0, 1.0, 0.0,
                                           -sin(shadron_Time), 0.0,  cos(shadron_Time));
-        vec3 torusPos = vec3(0.0, 1.4, 7.0);
+        vec3 torusPos = vec3(0.0, 1.5, 7.0);
         // Inner and Outer radii.
         vec2 torusRadius = vec2(0.4, 1.0);
         // Apply transformation and then rotation to centre of torus.
@@ -91,39 +106,56 @@ glsl float GetDistToScene(vec3 pos)
         // Calculate shape based on inner and outer radii.
         vec2 torusDist = vec2(length(torusTransformed.xz) - torusRadius.y, torusTransformed.y);
         objDist = length(torusDist) - torusRadius.x;
+        // Onion edge thinkness.
+        float torusThickness = 0.1;
+        objDist = max(ModifierOnion(ModifierOnion(objDist, torusThickness), torusThickness*0.5), length(torusTransformed.xz)-1.0);
         break;
-    case 5: // CYLINDER
-        // Rotation matrix, flip flat then rotate over time.
-        mat3 cylinRotation = mat3(1.0, 0.0, 0.0,
+    case 4: // CROSS PLANE - Extrusion
+        // Rotation matrix, rotate over time.
+        mat3 crossRotation = mat3(cos(shadron_Time), 0.0, sin(shadron_Time), 
+                                          0.0, 1.0, 0.0,
+                                          -sin(shadron_Time), 0.0,  cos(shadron_Time));
+        vec3 crossPos = vec3(0.0, 1.0, 7.0);
+        // Width of the cross and width of the 'legs'.
+        vec2 crossDimensions = vec2(0.9, 0.2);
+        // Controls the magnitude of the 'cut outs' that make the cross shape.
+        float crossCurveMagnitude = 0.09;
+        // Apply transformation and then rotation to cross. Abs to mirror shape in all directions.
+        vec3 crossTransformed = abs(crossRotation * (pos - crossPos));
+
+        // Processing to produce cross.
+        vec2 crossRegion = (crossTransformed.y > crossTransformed.x) ? crossTransformed.yx : crossTransformed.xy;
+        vec2 crossShape = crossRegion - crossDimensions;
+        float crossMaxCoord = max(crossShape.y,crossShape.x);
+        crossShape = (crossMaxCoord > 0.0) ? crossShape : vec2(crossDimensions.y - crossRegion.x, -crossMaxCoord);
+        float crossDist = sign(crossMaxCoord) * length(max(crossShape, 0.0)) + crossCurveMagnitude;
+
+        // Extrude plane to make 3D shape.
+        objDist = ModifierExtrusion(crossTransformed, crossDist, 0.5);
+        break;
+    case 5: // Vesica Piscis - Revolution
+        mat3 vesicaRotation = mat3(1.0, 0.0, 0.0,
                                   0.0, 0.0, -1.0,
                                   0.0, 1.0, 0.0)
-                             *
+                            *
                              mat3(cos(shadron_Time), 0.0, sin(shadron_Time), 
                                           0.0, 1.0, 0.0,
                                           -sin(shadron_Time), 0.0,  cos(shadron_Time));
-        vec3 cylinPos = vec3(0.0, 0.5, 7.0);
-        // x radius, y length.
-        vec2 cylinDimensions = vec2(0.5, 2);
-        // Apply transformation and then rotation to centre of cylinder.
-        vec3 cylinTransformed = cylinRotation * (pos - cylinPos);
-        // Calculate shape based on radius and length.
-        vec2 cylinDist = abs(vec2(length(cylinTransformed.xz), cylinTransformed.y)) - cylinDimensions;
-        objDist = min(max(cylinDist.x, cylinDist.y), 0.0) + length(max(cylinDist, 0.0));
-        break;
-    case 6: // CONE (infinately extending)
-        // Rotation matrix, flip flat then rotate over time.
-        mat3 coneRotation = mat3(1.0, 0.0, 0.0,
-                                  0.0, 0.0, 1.0,
-                                  0.0, -1.0, 0.0);
-        vec3 conePos = vec3(0.0, 2.0, 7.0);
-        float coneLength = 3.0;
-        float coneAngle = 1.3;
-        // Sine and Cosine of internal angle.
-        vec2 coneSCAngles = vec2(sin(coneAngle), cos(coneAngle));
-        // Apply transformation and then rotation to centre of cylinder.
-        vec3 coneTransformed = coneRotation * (pos - conePos);
-        // Calculate shape based on radius and length.
-        objDist = dot(coneSCAngles, vec2(length(coneTransformed.xy), coneTransformed.z));
+        vec3 vesicaPos = vec3(0.0, 1.5, 7.0);
+        // Height and 'inverse radius' of the vesica.
+        vec2 vesicaDimensions = vec2(0.7, 0.3);
+        // Apply transformation and then rotation to vesica. Abs to mirror shape in all directions.
+        // Modifider rotates the 2D about a point in space (centre + offset) to form a NFL football/torus like shape
+        // (based on off offset value)
+        vec2 vesicaTransformed = abs(ModifierRevolution(vesicaRotation * (pos - vesicaPos), 0.5 + 0.5*sin(shadron_Time/2)));
+
+        // Processing to produce vesica piscis shape.
+        float vesicaShape = sqrt(vesicaDimensions.x * vesicaDimensions.x - vesicaDimensions.y * vesicaDimensions.y);
+        float vesicaDist = ((vesicaTransformed.y - vesicaShape) * vesicaDimensions.y > vesicaTransformed.x * vesicaShape)
+                ? length(vesicaTransformed - vec2(0.0, vesicaShape))
+                : length(vesicaTransformed - vec2(-vesicaDimensions.y, 0.0)) - vesicaDimensions.x;
+
+        objDist = vesicaDist;
         break;
     default:
         break;

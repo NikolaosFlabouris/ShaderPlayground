@@ -10,7 +10,7 @@ const int MAX_STEPS = 100;
 const float MAX_DIST = 100.0;
 const float SURF_DIST = 0.01;
 
-parameter int Object_Selector = 1 : range(1, 9);
+parameter int Object_Selector = 1 : range(1, 11);
 parameter vec3 Envrionment_Colour = vec3(1.0, 1.0, 1.0) : color();
 parameter vec3 Light_Colour = vec3(1.0, 1.0, 1.0) : color();
 
@@ -24,25 +24,138 @@ glsl vec3 ModifierElongate(vec3 pos, vec3 elongation)
     return pos - clamp(pos, -elongation, elongation);
 }
 
-glsl float ModifierRound(float pos, float roundfactor)
+///
+/// Rounds the edges to be smoother.
+/// \param dist - distance from ray march.
+/// \param roundFactor - value that determines how much to round by.
+/// \return - new poisition in space.
+glsl float ModifierRound(float dist, float roundFactor)
 {
-    return pos - roundfactor;
+    return dist - roundFactor;
 }
 
+///
+/// Creates depth to the cross section edge. Looks like it produces an internal 'layer'.
+/// \param dist - distance from ray march.
+/// \param thickness - width of the internal edge. 
+/// \return - new poisition in space.
 glsl float ModifierOnion(float dist, float thickness)
 {
     return abs(dist) - thickness;
 }
 
-glsl float ModifierExtrusion(vec3 pos, float sdf, float height)
+///
+/// Extends/extrudes the shape in the z direction.
+/// \param pos - position in space.
+/// \param dist - distance from ray march.
+/// \return - new poisition in space.
+glsl float ModifierExtrusion(vec3 pos, float dist, float height)
 {
-    vec2 extrusion = vec2(sdf, abs(pos.z) - height);
+    vec2 extrusion = vec2(dist, abs(pos.z) - height);
   	return min(max(extrusion.x, extrusion.y), 0.0) + length(max(extrusion, 0.0));
 }
 
+///
+/// Revolves a shape about its centre + and offset.
+/// \param pos - position in space.
+/// \param offset - revolution point offset from centre of shape.
+/// \return - new position in space.
 glsl vec2 ModifierRevolution(vec3 pos, float offset)
 {
     return vec2(length(pos.xz) - offset, pos.y);
+}
+
+
+///
+/// Combines two intersecting shapes by setting the distance to the furth object.
+/// \param objDist1 - distance to first obj.
+/// \param objDist2 - distance to second obj.
+/// \return - distance to closest obj.
+glsl float ObjUnion(float objDist1, float objDist2)
+{
+    return min(objDist1, objDist2);
+}
+
+///
+/// Removes the intersection area of obj1 and obj2 from obj1.
+/// \param objDist1 - distance to first obj.
+/// \param objDist2 - distance to second obj.
+/// \return - distance to the new obj.
+glsl float ObjSubtraction(float objDist1, float objDist2)
+{
+    return max(-objDist1, objDist2);
+}
+
+/// Creates a new object who's edge is made from the intersection of obj1 and obj2.
+/// \param objDist1 - distance to first obj.
+/// \param objDist2 - distance to second obj.
+/// \return - distance to the new obj.
+glsl float ObjIntersection(float objDist1, float objDist2)
+{
+    return max(objDist1, objDist2);
+}
+
+///
+/// Combines two intersecting shapes by setting the distance to the furth object.
+/// Smooth transition between objects.
+/// \param objDist1 - distance to first obj.
+/// \param objDist2 - distance to second obj.
+/// \return - distance to closest obj.
+glsl float ObjSmoothUnion(float objDist1, float objDist2, float smoothFactor)
+{
+    float smoothUnion = clamp(0.5 + 0.5*(objDist2-objDist1)/smoothFactor, 0.0, 1.0);
+    return mix(objDist2, objDist1, smoothUnion) - smoothFactor * smoothUnion * (1.0 - smoothUnion);
+}
+
+///
+/// Removes the intersection area of obj1 and obj2 from obj1 and creates a smooth edge.
+/// \param objDist1 - distance to first obj.
+/// \param objDist2 - distance to second obj.
+/// \return - distance to the new obj.
+glsl float ObjSmoothSubtraction(float objDist1, float objDist2, float smoothFactor)
+{
+    float subtract = clamp(0.5 - 0.5*(objDist2+objDist1)/smoothFactor, 0.0, 1.0);
+    return mix(objDist2, -objDist1, subtract) + smoothFactor * subtract * (1.0 - subtract);
+}
+
+/// Creates a new object who's edge is made from the intersection of obj1 and obj2
+/// and is smooth.
+/// \param objDist1 - distance to first obj.
+/// \param objDist2 - distance to second obj.
+/// \return - distance to the new obj.
+glsl float ObjSmoothIntersection(float objDist1, float objDist2, float smoothFactor)
+{
+    float intersect = clamp(0.5 - 0.5*(objDist2-objDist1)/smoothFactor, 0.0, 1.0);
+    return mix(objDist2, objDist1, intersect) + smoothFactor * intersect * (1.0 - intersect);
+}
+
+///
+/// Distance to a sphere.
+/// \param pos - position in space.
+/// \return - distance to sphere.
+glsl float SpherePrim(vec3 pos)
+{
+    vec3 spherePos = vec3(0.0, 1.0, 7.0);
+    float sphereRadius = 1.0;
+    vec3 sphereTransformed = pos - spherePos;
+    float sphereDist =  length(sphereTransformed) - sphereRadius;
+    return sphereDist;
+}
+
+///
+/// Distance to a rectangular box.
+/// \param pos - position in space.
+/// \return - distance to box.
+glsl float rectBoxPrim(vec3 pos)
+{
+    mat3 rectBoxRotation = mat3(cos(shadron_Time), 0.0, sin(shadron_Time), 
+                    0.0, 1.0, 0.0,
+                    -sin(shadron_Time), 0.0,  cos(shadron_Time));
+    vec3 rectBoxPos = vec3(0.0, 0.4, 7.0);
+    vec3 rectBoxWidth = vec3(0.6, 0.4, 1.8);
+    vec3 rectboxTransformed = rectBoxRotation * (pos - rectBoxPos);
+    vec3 rectBoxDist = abs(rectboxTransformed) - rectBoxWidth;
+    return length(max(rectBoxDist,0.0));
 }
 
 ///
@@ -156,6 +269,24 @@ glsl float GetDistToScene(vec3 pos)
                 : length(vesicaTransformed - vec2(-vesicaDimensions.y, 0.0)) - vesicaDimensions.x;
 
         objDist = vesicaDist;
+        break;
+    case 6: // Union of sphere and box.
+        objDist = ObjUnion(SpherePrim(pos), rectBoxPrim(pos));
+        break;
+    case 7: // Subtraction of sphere from box.
+        objDist = ObjSubtraction(SpherePrim(pos), rectBoxPrim(pos));
+        break;
+    case 8: // Intersection of sphere and box.
+        objDist = ObjIntersection(SpherePrim(pos), rectBoxPrim(pos));
+        break;
+    case 9: // Smooth Union of sphere and box.
+        objDist = ObjSmoothUnion(SpherePrim(pos), rectBoxPrim(pos), 0.2);
+        break;
+    case 10: // Smooth Subtraction of sphere from box.
+        objDist = ObjSmoothSubtraction(SpherePrim(pos), rectBoxPrim(pos), 0.2);
+        break;
+    case 11: // Smooth Intersection of sphere and box.
+        objDist = ObjSmoothIntersection(SpherePrim(pos), rectBoxPrim(pos), 0.2);
         break;
     default:
         break;
@@ -283,4 +414,4 @@ glsl vec4 LoadPrimitive(vec2 fragCoord)
 
 animation myShader = glsl(LoadPrimitive, WIDTH, HEIGHT);
 
-export gif(myShader, "Primative.gif", 30, 6.2831, true);
+export gif(myShader, "ExtendedPrimative.gif", 30, 6.2831, true);

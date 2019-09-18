@@ -409,6 +409,8 @@ glsl vec4 LoadPrimitive(vec2 fragCoord)
     // Emulates some environmental lighting, surfaces close the camera have some
     // light, the further away the less light is added.
     colour += 1/distance * Envrionment_Colour;
+    // Crude brightness control.
+    colour *= 1.2;
     return vec4(colour,1.0);
 }
 

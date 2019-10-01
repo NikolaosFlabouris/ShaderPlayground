@@ -1,4 +1,4 @@
-// Basic Ray March
+// Extension of basic Ray March objects and shapes.
 
 #extension gif
 #version 140

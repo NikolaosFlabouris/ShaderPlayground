@@ -107,6 +107,22 @@ glsl float ObjSmoothUnion(float objDist1, float objDist2, float smoothFactor)
     return mix(objDist2, objDist1, smoothUnion) - smoothFactor * smoothUnion * (1.0 - smoothUnion);
 }
 
+/// Alternative smooth union functions.
+
+// exponential smooth min (k = 32);
+glsl float ObjSmoothUnionExp( float a, float b, float k )
+{
+    float res = exp2( -k*a ) + exp2( -k*b );
+    return -log2( res )/k;
+}
+
+// power smooth min (k = 8);
+glsl float ObjSmoothUnionPower( float a, float b, float k )
+{
+    a = pow( a, k ); b = pow( b, k );
+    return pow( (a*b)/(a+b), 1.0/k );
+}
+
 ///
 /// Removes the intersection area of obj1 and obj2 from obj1 and creates a smooth edge.
 /// \param objDist1 - distance to first obj.

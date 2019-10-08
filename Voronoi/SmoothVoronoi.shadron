@@ -1,0 +1,52 @@
+// Implementaion of the functions described in
+// The Book of Shaders, Chapter: Generative Designs - Celluar Noise.
+
+#extension gif
+
+#include <hsv>
+#include <math_constants>
+
+const int WIDTH = 720;
+const int HEIGHT = 720;
+
+parameter int Scale_Factor = 1 : range(1, 20);
+parameter float Exponential_Factor = 32.0 : range(8.0, 64.0);
+
+// A deterministic random function.
+glsl vec2 random2(vec2 pos)
+{
+    return fract(sin(vec2(dot(pos, vec2(127.1, 311.7)), dot(pos, vec2(269.5, 183.3)))) * 43758.5453);
+}
+
+glsl vec4 VoronoiSmooth(vec2 position)
+{
+    vec2 scaledPos = position * Scale_Factor;
+
+    vec2 region = floor(scaledPos);
+    vec2 localPos = fract(scaledPos);
+
+    float strength = 0.0;
+
+    for(int regionX = -1; regionX <= 1; ++regionX)
+    {
+        for(int regionY = -1; regionY <= 1; ++regionY)
+        {
+            vec2 neighbourOffset = vec2(float(regionX), float(regionY));
+
+            vec2 randomLocation = random2(region + neighbourOffset);
+
+            randomLocation = 0.5 + (0.5 * sin(shadron_Time + 6.2831 * randomLocation));
+
+            vec2 difference = neighbourOffset + randomLocation - localPos;
+
+            strength += exp( -Exponential_Factor * length(difference));
+        }
+    }
+
+    float result = -(1.0/Exponential_Factor) * log(strength);
+    return vec4(vec3(result), 1.0);
+}
+
+animation myShader = glsl(VoronoiSmooth, WIDTH, HEIGHT);
+
+export gif(myShader, "Voronoi.gif", 30, 6.2831, true);

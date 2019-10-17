@@ -4,11 +4,13 @@
 #version 140
 #include <math_constants>
 
-const int WIDTH = 1000;
+const int WIDTH = 1200;
 const int HEIGHT = 800;
 const int MAX_STEPS = 100;
 const float MAX_DIST = 100.0;
 const float SURF_DIST = 0.01;
+
+parameter int Number_Of_Reflections = 2 : range(1, 4);
 
 // Details of an object in the scene.
 glsl struct ObjDetails
@@ -34,6 +36,15 @@ glsl float DistanceToSphere(vec3 pos, vec3 spherePos, float sphereRadius)
 }
 
 ///
+/// Distance to the plane.
+/// \param pos - World position.
+/// \return distance from world position to ground plane.
+glsl float DistanceToPlane(vec3 pos)
+{
+    return pos.y;
+}
+
+///
 /// Returns the details of the closest object in the scene to the specified point.
 /// \param pos - Position in space to measure against.
 /// \return - Distance to closet object in scene.
@@ -46,7 +57,7 @@ glsl ObjDetails GetSceneDetails(vec3 pos)
     float objDist4 = DistanceToSphere(pos, vec3(1.5, 1.0, 8.5), 1.0f);
 
     // Ground plane is pos.y distance away from position as it is at y = 0.
-    float planeDist = pos.y;
+    float planeDist = DistanceToPlane(pos);
     
     // Return distance to closest object.
     ObjDetails objDetails;
@@ -148,6 +159,46 @@ glsl ObjDetails RayMarch(vec3 rayOrigin, vec3 rayDirection)
 }
 
 ///
+/// Apply Penumbra Shadows based on objection position and light direction.
+/// Ray march back checking if anything is blocking light to path or is very close
+/// to the path back to the light. If close apply a shadow based on how close.
+///
+/// \param surfacePos - Surface position to check if there are any shadows.
+/// \param directionToLight - The direction to the light source to check for shadows.
+/// \return - shadow amount.
+///
+glsl float PenumbraShadow(vec3 surfacePos, vec3 directionToLight)
+{
+    float minStep = 0.01;
+    float maxStep = 3.0;
+    float step = minStep;
+	float residualShadow = 1.0;
+    float previousStep = 1e10; // big, such that y = 0 on the first iteration
+    
+    for(int iteration = 0; iteration < 32; iteration++)
+    {
+        // Distance from current ray position (traveling back to light) to closest object.
+        // Measured as a radius from current position on ray.
+		float distToScene = GetSceneDetails(surfacePos + (directionToLight * step)).distance;
+        // Actual distance/position along ray that is closest to object.
+        // The spot on the ray perpendicular to the object.
+        float distToClosest = (distToScene * distToScene)/(2.0 * previousStep);
+        // Shortest distance to closest object to ray (travelling back to light).
+        float distRayToObj = sqrt((distToScene * distToScene) - distToClosest * distToClosest);
+        residualShadow = min(residualShadow, 10.0 * distRayToObj/max(0.0, step - distToClosest));
+
+        previousStep = distToScene;
+        step += distToScene;
+        
+        if(residualShadow < 0.0001 || step > maxStep)
+        {
+            break;
+        }
+    }
+    return clamp(residualShadow, 0.0, 1.0);
+}
+
+///
 /// Calculates the light intensity at a given point in space.
 /// \param pos - Position in space to measure light intensity at.
 /// \return - diffuse light intensity.
@@ -155,7 +206,7 @@ glsl ObjDetails RayMarch(vec3 rayOrigin, vec3 rayDirection)
 glsl float GetLight(vec3 pos)
 {
     // Starting light position.
-    vec3 lightPos = vec3(0.0, 4.0, 5.0);
+    vec3 lightPos = vec3(0.0, 4.0, 4.0);
     // Move light in circle over time.
     //lightPos.xz += vec2(sin(-shadron_Time), cos(-shadron_Time)) * 1.8;
     // Point light, light is in all directions.
@@ -167,23 +218,24 @@ glsl float GetLight(vec3 pos)
     // If surface is facing light direction (surface normal is close to light 
     // direction) then diffuse light is strong/bright.
     float diffuse = clamp(dot(normal, lightDirecton), 0.0, 1.0);
-    // Check if point in space is behind another object (i.e not the closest
-    // surface point along the direction to the light). If behind something
-    // then lower the light intesity to simulate a shadow.
-    float distance = RayMarch(pos + normal * SURF_DIST * 2.0, lightDirecton).distance;
-    if(distance < length(lightPos - pos))
-    {
-        diffuse *= 0.5;
-    }
+
+    diffuse *= PenumbraShadow(pos, lightDirecton);
     
     return diffuse;
 }
 
-glsl ObjDetails RayMarchColourBounce(vec3 rayOrigin, vec3 rayDirection, int numOfBounces)
+///
+/// Calcuates the colour of an object in the scene based on the number of reflections.
+///
+/// \param rayOrigin - The starting location of the ray before it bounces.
+/// \param rayDirection - The initial direction of the ray before it bounces.
+/// \para numOfBounces - The total number of reflections or times the light ray bounces.
+/// \return - The final colour taking reflections into account.
+///
+glsl vec3 RayMarchColourBounce(vec3 rayOrigin, vec3 rayDirection, int numOfBounces)
 {
-    ObjDetails sceneDetails;
+    vec3 colour = vec3(0.0f, 0.0f, 0.0f);
     ObjDetails reflectionObj;
-    sceneDetails.colour = vec3(0.0f, 0.0f, 0.0f);
     vec3 bounceLocation = rayOrigin;
     vec3 bounceDirection = rayDirection;
     float distFromReflection = SURF_DIST * 2.0;
@@ -200,19 +252,23 @@ glsl ObjDetails RayMarchColourBounce(vec3 rayOrigin, vec3 rayDirection, int numO
         float dif = GetLight(reflectionLocation);
         reflectionObj.colour = reflectionObj.colour * vec3(dif) * lightColour;
 
-        sceneDetails.distance = reflectionObj.distance;
-        sceneDetails.colour = mix(sceneDetails.colour, reflectionObj.colour, 1.0f/(bounce * bounce));
-        if(reflectionObj.distance > MAX_DIST)
+        // Mix colour of reflection with main surface colour.
+        colour = mix(colour, reflectionObj.colour, 1.0f/(bounce * bounce));
+
+        // If shooting off to inifinity or ground plane hit stop bouncing.
+        if(reflectionObj.distance > MAX_DIST ||
+          DistanceToPlane(reflectionLocation) <= distFromReflection)
         {
             break;
         }
 
+        // Update location and ray march along reflection vector on next interation.
         vec3 surfaceNormal = GetNormal(reflectionLocation);
         bounceLocation += reflectionLocation + (distFromReflection * surfaceNormal);
         bounceDirection = GetReflection(bounceDirection, surfaceNormal);
     }
 
-    return sceneDetails;
+    return colour;
 }
 
 ///
@@ -224,8 +280,6 @@ glsl vec4 LoadPrimitive(vec2 fragCoord)
 {
     // Normalise to -1.0 to 1.0.
     vec2 uv = (fragCoord - 0.5) * vec2(WIDTH, HEIGHT)/HEIGHT;
-
-    vec3 colour = vec3(0.0);
     
     // Camera position.
     vec3 rayOrigin = vec3(0.0, 1.5, 0.0);
@@ -234,9 +288,9 @@ glsl vec4 LoadPrimitive(vec2 fragCoord)
 
     // Shoot ray in camera direction from camera position. Determine where the
     // closest target is in that direction (max rander distance counts as a 'target')
-    ObjDetails targetObj = RayMarchColourBounce(rayOrigin, rayDirection, 3);
+    vec3 colour = RayMarchColourBounce(rayOrigin, rayDirection, Number_Of_Reflections);
     
-    return vec4(targetObj.colour, 1.0);
+    return vec4(colour, 1.0);
 }
 
 image myShader = glsl(LoadPrimitive, WIDTH, HEIGHT);

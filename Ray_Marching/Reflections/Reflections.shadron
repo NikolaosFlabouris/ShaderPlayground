@@ -276,7 +276,7 @@ glsl vec3 RayMarchColourBounce(vec3 rayOrigin, vec3 rayDirection, int numOfBounc
 /// \param fragCoord - fragment coordinate.
 /// \return - fragment colour.
 ///
-glsl vec4 LoadPrimitive(vec2 fragCoord)
+glsl vec4 LoadScene(vec2 fragCoord)
 {
     // Normalise to -1.0 to 1.0.
     vec2 uv = (fragCoord - 0.5) * vec2(WIDTH, HEIGHT)/HEIGHT;
@@ -293,6 +293,6 @@ glsl vec4 LoadPrimitive(vec2 fragCoord)
     return vec4(colour, 1.0);
 }
 
-image myShader = glsl(LoadPrimitive, WIDTH, HEIGHT);
+image myShader = glsl(LoadScene, WIDTH, HEIGHT);
 
 export png(myShader, "Reflections.png");

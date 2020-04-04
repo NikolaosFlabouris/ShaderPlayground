@@ -10,7 +10,8 @@ const int MAX_STEPS = 100;
 const float MAX_DIST = 100.0;
 const float SURF_DIST = 0.01;
 
-parameter int Number_Of_Reflections = 2 : range(1, 4);
+parameter int Number_Of_Light_Bounces = 2 : range(1, 4);
+parameter float rotation = 0 : range(0.0f, 4.0f);
 
 // Details of an object in the scene.
 glsl struct ObjDetails
@@ -33,6 +34,26 @@ glsl float DistanceToSphere(vec3 pos, vec3 spherePos, float sphereRadius)
     // Sphere is defined as a uniform distace from position.
     float sphereDist =  length(sphereTransformed) - sphereRadius;
     return sphereDist;
+}
+
+///
+/// Distance to a cube.
+/// \param pos - World position.
+/// \param cubePos - Position of the centre of the cube.
+/// \param cubeWidth - Radius of the cube.
+/// \return - distance from the world position to the cube.
+///
+glsl float DistanceToCube(vec3 pos, vec3 cubePos, float cubeWidth)
+{
+    float angle = 0.7f * rotation; //shadron_Time;
+    // Rotation matrix, rotate over time.
+    mat3 sqBoxRotation = mat3( 1.0, 0.0,0.0, 
+                    0.0, cos(angle), sin(angle),
+                    0.0,  -sin(angle), cos(angle));
+
+    // Apply width which defines the box shape.
+    vec3 sqBoxDist = abs(sqBoxRotation * (pos - cubePos)) - cubeWidth/1.3f;
+    return length(max(sqBoxDist,0.0));
 }
 
 ///
@@ -229,7 +250,7 @@ glsl float GetLight(vec3 pos)
 ///
 /// \param rayOrigin - The starting location of the ray before it bounces.
 /// \param rayDirection - The initial direction of the ray before it bounces.
-/// \para numOfBounces - The total number of reflections or times the light ray bounces.
+/// \param numOfBounces - The total number of reflections or times the light ray bounces.
 /// \return - The final colour taking reflections into account.
 ///
 glsl vec3 RayMarchColourBounce(vec3 rayOrigin, vec3 rayDirection, int numOfBounces)
@@ -256,8 +277,7 @@ glsl vec3 RayMarchColourBounce(vec3 rayOrigin, vec3 rayDirection, int numOfBounc
         colour = mix(colour, reflectionObj.colour, 1.0f/(bounce * bounce));
 
         // If shooting off to inifinity or ground plane hit stop bouncing.
-        if(reflectionObj.distance > MAX_DIST ||
-          DistanceToPlane(reflectionLocation) <= distFromReflection)
+        if(reflectionObj.distance > MAX_DIST)// || DistanceToPlane(reflectionLocation) <= distFromReflection)
         {
             break;
         }
@@ -288,11 +308,11 @@ glsl vec4 LoadScene(vec2 fragCoord)
 
     // Shoot ray in camera direction from camera position. Determine where the
     // closest target is in that direction (max rander distance counts as a 'target')
-    vec3 colour = RayMarchColourBounce(rayOrigin, rayDirection, Number_Of_Reflections);
+    vec3 colour = RayMarchColourBounce(rayOrigin, rayDirection, Number_Of_Light_Bounces);
     
     return vec4(colour, 1.0);
 }
 
-image myShader = glsl(LoadScene, WIDTH, HEIGHT);
+animation myShader = glsl(LoadScene, WIDTH, HEIGHT);
 
 export png(myShader, "Reflections.png");

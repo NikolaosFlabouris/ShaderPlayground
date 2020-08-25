@@ -1,0 +1,230 @@
+// Basic Ray March
+
+#extension gif
+#version 140
+#include <math_constants>
+#include "Primitives.shadron"
+
+const int WIDTH = 1920;
+const int HEIGHT = 1080;
+const int MAX_STEPS = 100;
+const float MAX_DIST = 100.0;
+const float SURF_DIST = 0.01;
+
+parameter int Object_Selector = 1 : range(1, 6);
+parameter vec3 Envrionment_Colour = vec3(1.0, 1.0, 1.0) : color();
+parameter vec3 Light_Colour = vec3(1.0, 1.0, 1.0) : color();
+
+///
+/// Returns the distance of the closest object in the scene to the specified point. Different
+/// objects are loading into the scene based on the Object Selector slider.
+/// \param pos - Position in space to measure against.
+/// \return - Distance to closet object in scene.
+///
+glsl float GetDistToScene(vec3 pos)
+{
+    float objDist = 0.0;
+    switch(Object_Selector)
+    {
+    case 1: // SPHERE
+        // x, y, z position and radius.
+        vec3 spherePos = vec3(0.0, 1.0, 7.0);
+        float sphereRadius = 1.0;
+
+        objDist = SpherePrim(pos, spherePos, sphereRadius);
+        break;
+    case 2: // SQUARE BOX
+        // Box postion and x, y, z widths. Widths are the same cause it is a square box!
+        vec3 sqBoxPos = vec3(0.0, 0.6, 7.0);
+        vec3 sqBoxWidth = vec3(0.6);
+
+        // Rotation matrix, rotate over time.
+        mat3 sqBoxRotation = mat3(cos(shadron_Time), 0.0, sin(shadron_Time), 
+                                  0.0, 1.0, 0.0,
+                                  -sin(shadron_Time), 0.0,  cos(shadron_Time));
+        
+        objDist = RectBoxPrim(pos, sqBoxPos, sqBoxWidth, sqBoxRotation);
+        break;
+    case 3: // RECTANGULAR BOX
+        // Box position and x, y, z widths. Different cause it aint a square box!
+        vec3 rectBoxPos = vec3(0.0, 0.4, 7.0);
+        vec3 rectBoxWidth = vec3(0.6, 0.4, 1.8);
+
+        // Rotation matrix, rotate over time.
+        mat3 rectBoxRotation = mat3(cos(shadron_Time), 0.0, sin(shadron_Time), 
+                                    0.0, 1.0, 0.0,
+                                    -sin(shadron_Time), 0.0,  cos(shadron_Time));
+
+        objDist = RectBoxPrim(pos, rectBoxPos, rectBoxWidth, rectBoxRotation);
+        break;
+    case 4: // TORUS
+        // Torus position and inner and outer radii.
+        vec3 torusPos = vec3(0.0, 1.4, 7.0);
+        vec2 torusRadius = vec2(0.4, 1.0);
+
+        // Rotation matrix, flip vertical then rotate over time.
+        mat3 torusRotation = mat3(1.0, 0.0, 0.0,
+                                  0.0, 0.0, -1.0,
+                                  0.0, 1.0, 0.0)
+                             *
+                             mat3(cos(shadron_Time), 0.0, sin(shadron_Time), 
+                                  0.0, 1.0, 0.0,
+                                  -sin(shadron_Time), 0.0,  cos(shadron_Time));
+
+        objDist = TorusPrim(pos, torusPos, torusRadius, torusRotation);
+        break;
+    case 5: // CYLINDER
+        // Cylinder position and dimensions. Dimensions: x = radius, y = length.
+        vec3 cylinPos = vec3(0.0, 0.5, 7.0);
+        vec2 cylinDimensions = vec2(0.5, 2);
+
+        // Rotation matrix, flip flat then rotate over time.
+        mat3 cylinRotation = mat3(1.0, 0.0, 0.0,
+                                  0.0, 0.0, -1.0,
+                                  0.0, 1.0, 0.0)
+                             *
+                             mat3(cos(shadron_Time), 0.0, sin(shadron_Time), 
+                                          0.0, 1.0, 0.0,
+                                          -sin(shadron_Time), 0.0,  cos(shadron_Time));
+
+        objDist = CylinderPrim(pos, cylinPos, cylinDimensions, cylinRotation);
+        break;
+    case 6: // CONE (infinately extending)
+        // Cone position, length and internal angle in radians.
+        vec3 conePos = vec3(0.0, 2.0, 7.0);
+        float coneLength = 3.0;
+        float coneAngle = 1.3;
+        // Rotation matrix, flip flat then rotate over time.
+        mat3 coneRotation = mat3(1.0, 0.0, 0.0,
+                                  0.0, 0.0, 1.0,
+                                  0.0, -1.0, 0.0);
+
+        objDist = ConePrim(pos, conePos, coneLength, coneAngle, coneRotation);
+        break;
+    default:
+        break;
+    }
+
+    // Ground plane is pos.y distance away from position as it is at y = 0.
+    float planeDist = pos.y;
+    
+    // Return distance to closest object.
+    return min(objDist, planeDist);
+}
+
+///
+/// From the specified origin, ray march in the given direction measuring the distance
+/// to the closest object at each step. Once marched close enough to any object in the
+/// scene (or marched past the point we care) return the distance.
+/// \param rayOrigin - The location to start ray marching from.
+/// \return - distance to scene along ray direction (or max render distance)
+///
+glsl float RayMarch(vec3 rayOrigin, vec3 rayDirection)
+{
+	float distFromOrigin = 0.0;
+    
+    // Ray march for a given number of steps.
+    for(int step = 0; step < MAX_STEPS; ++step)
+    {
+        // Current location.
+    	vec3 stepLocation = rayOrigin + rayDirection * distFromOrigin;
+        // Get the closest distance to anything in the scene from current location.
+        float distToScene = GetDistToScene(stepLocation);
+        // Travel that distance forwards.
+        distFromOrigin += distToScene;
+        // If at max render distance (ray missed all objects in scene and is shooting off
+        // to infinity) or super close to an object's surface return current distance.
+        if(distFromOrigin > MAX_DIST || distToScene < SURF_DIST)
+        {
+            break;
+        }
+    }
+    
+    return distFromOrigin;
+}
+
+///
+/// Calculates normal at a given point by measuring the small deviations of the surface
+/// in each direction of the specified position.
+/// \param pos - Position on a surface to calculate the normal of.
+/// \return - normal vector.
+glsl vec3 GetNormal(vec3 pos)
+{
+	float distance = GetDistToScene(pos);
+    vec2 deviation = vec2(.01, 0);
+    
+    vec3 normal = distance - vec3(
+        GetDistToScene(pos-deviation.xyy),
+        GetDistToScene(pos-deviation.yxy),
+        GetDistToScene(pos-deviation.yyx));
+    
+    // Normalise as we only want direction.
+    return normalize(normal);
+}
+
+///
+/// Calculates the light intensity at a given point in space.
+/// \param pos - Position in space to measure light intensity at.
+/// \return - diffuse light intensity.
+/// 
+glsl float GetLight(vec3 pos)
+{
+    // Starting light position.
+    vec3 lightPos = vec3(0.0, 4.0, 7.0);
+    // Move light in circle over time.
+    lightPos.xz += vec2(sin(-shadron_Time), cos(-shadron_Time)) * 1.8;
+    // Point light, light is in all directions.
+    vec3 lightDirecton = normalize(lightPos-pos);
+    // Get angle of surface at a particular point in space.
+    vec3 normal = GetNormal(pos);
+    
+    // Diffuse lighting is based on angle of surface compared to light direction.
+    // If surface is facing light direction (surface normal is close to light 
+    // direction) then diffuse light is strong/bright.
+    float diffuse = clamp(dot(normal, lightDirecton), 0.0, 1.0);
+    // Check if point in space is behind another object (i.e not the closest
+    // surface point along the direction to the light). If behind something
+    // then lower the light intesity to simulate a shadow.
+    float distance = RayMarch(pos + normal * SURF_DIST * 2.0, lightDirecton);
+    if(distance < length(lightPos - pos))
+    {
+        diffuse *= 0.5;
+    }
+    
+    return diffuse;
+}
+
+///
+/// Uses ray marching to draw a 3D primitve object lit by a rotating point light.
+/// \param fragCoord - fragment coordinate.
+/// \return - fragment colour.
+///
+glsl vec4 LoadPrimitive(vec2 fragCoord)
+{
+    // Normalise to -1.0 to 1.0.
+    vec2 uv = (fragCoord - 0.5) * vec2(WIDTH, HEIGHT)/HEIGHT;
+
+    vec3 colour = vec3(0.0);
+    
+    // Camera position.
+    vec3 rayOrigin = vec3(0.0, 1.5, 0.0);
+    // Camera direction.
+    vec3 rayDirection = normalize(vec3(uv.x, uv.y, 1.0));
+
+    // Shoot ray in camera direction from camera position. Determine where the
+    // closest target is in that direction (max rander distance counts as a 'target')
+    float distance = RayMarch(rayOrigin, rayDirection);
+    vec3 targetPosition = rayOrigin + rayDirection * distance;
+    
+    // Colour of target is based on light intensity at sufrace.
+    float dif = GetLight(targetPosition);
+    colour = vec3(dif) * Light_Colour;
+    // Emulates some environmental lighting, surfaces close the camera have some
+    // light, the further away the less light is added.
+    colour += 1/distance * Envrionment_Colour;
+    return vec4(colour,1.0);
+}
+
+animation myShader = glsl(LoadPrimitive, WIDTH, HEIGHT);
+
+export gif(myShader, "Primative.gif", 30, 6.2831, true);

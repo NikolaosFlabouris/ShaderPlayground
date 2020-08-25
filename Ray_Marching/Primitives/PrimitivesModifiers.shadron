@@ -1,0 +1,134 @@
+/// Functions for modifing shapes.
+
+#version 140
+
+///
+/// Elongates the shape in the x, y and z positions.
+/// \param pos - position in space.
+/// \param elongation - elongation factor in x, y, z directions.
+/// \return - new position in space.
+glsl vec3 ModifierElongate(vec3 pos, vec3 elongation)
+{
+    return pos - clamp(pos, -elongation, elongation);
+}
+
+///
+/// Rounds the edges to be smoother.
+/// \param dist - distance from ray march.
+/// \param roundFactor - value that determines how much to round by.
+/// \return - new poisition in space.
+glsl float ModifierRound(float dist, float roundFactor)
+{
+    return dist - roundFactor;
+}
+
+///
+/// Creates depth to the cross section edge. Looks like it produces an internal 'layer'.
+/// \param dist - distance from ray march.
+/// \param thickness - width of the internal edge. 
+/// \return - new poisition in space.
+glsl float ModifierOnion(float dist, float thickness)
+{
+    return abs(dist) - thickness;
+}
+
+///
+/// Extends/extrudes the shape in the z direction.
+/// \param pos - position in space.
+/// \param dist - distance from ray march.
+/// \return - new poisition in space.
+glsl float ModifierExtrusion(vec3 pos, float dist, float height)
+{
+    vec2 extrusion = vec2(dist, abs(pos.z) - height);
+  	return min(max(extrusion.x, extrusion.y), 0.0) + length(max(extrusion, 0.0));
+}
+
+///
+/// Revolves a shape about its centre + and offset.
+/// \param pos - position in space.
+/// \param offset - revolution point offset from centre of shape.
+/// \return - new position in space.
+glsl vec2 ModifierRevolution(vec3 pos, float offset)
+{
+    return vec2(length(pos.xz) - offset, pos.y);
+}
+
+
+///
+/// Combines two intersecting shapes by setting the distance to the furth object.
+/// \param objDist1 - distance to first obj.
+/// \param objDist2 - distance to second obj.
+/// \return - distance to closest obj.
+glsl float ObjUnion(float objDist1, float objDist2)
+{
+    return min(objDist1, objDist2);
+}
+
+///
+/// Removes the intersection area of obj1 and obj2 from obj1.
+/// \param objDist1 - distance to first obj.
+/// \param objDist2 - distance to second obj.
+/// \return - distance to the new obj.
+glsl float ObjSubtraction(float objDist1, float objDist2)
+{
+    return max(-objDist1, objDist2);
+}
+
+/// Creates a new object who's edge is made from the intersection of obj1 and obj2.
+/// \param objDist1 - distance to first obj.
+/// \param objDist2 - distance to second obj.
+/// \return - distance to the new obj.
+glsl float ObjIntersection(float objDist1, float objDist2)
+{
+    return max(objDist1, objDist2);
+}
+
+///
+/// Combines two intersecting shapes by setting the distance to the furth object.
+/// Smooth transition between objects.
+/// \param objDist1 - distance to first obj.
+/// \param objDist2 - distance to second obj.
+/// \return - distance to closest obj.
+glsl float ObjSmoothUnion(float objDist1, float objDist2, float smoothFactor)
+{
+    float smoothUnion = clamp(0.5 + 0.5*(objDist2-objDist1)/smoothFactor, 0.0, 1.0);
+    return mix(objDist2, objDist1, smoothUnion) - smoothFactor * smoothUnion * (1.0 - smoothUnion);
+}
+
+/// Alternative smooth union functions.
+
+// exponential smooth min (k = 32);
+glsl float ObjSmoothUnionExp( float a, float b, float k )
+{
+    float res = exp2( -k*a ) + exp2( -k*b );
+    return -log2( res )/k;
+}
+
+// power smooth min (k = 8);
+glsl float ObjSmoothUnionPower( float a, float b, float k )
+{
+    a = pow( a, k ); b = pow( b, k );
+    return pow( (a*b)/(a+b), 1.0/k );
+}
+
+///
+/// Removes the intersection area of obj1 and obj2 from obj1 and creates a smooth edge.
+/// \param objDist1 - distance to first obj.
+/// \param objDist2 - distance to second obj.
+/// \return - distance to the new obj.
+glsl float ObjSmoothSubtraction(float objDist1, float objDist2, float smoothFactor)
+{
+    float subtract = clamp(0.5 - 0.5*(objDist2+objDist1)/smoothFactor, 0.0, 1.0);
+    return mix(objDist2, -objDist1, subtract) + smoothFactor * subtract * (1.0 - subtract);
+}
+
+/// Creates a new object who's edge is made from the intersection of obj1 and obj2
+/// and is smooth.
+/// \param objDist1 - distance to first obj.
+/// \param objDist2 - distance to second obj.
+/// \return - distance to the new obj.
+glsl float ObjSmoothIntersection(float objDist1, float objDist2, float smoothFactor)
+{
+    float intersect = clamp(0.5 - 0.5*(objDist2-objDist1)/smoothFactor, 0.0, 1.0);
+    return mix(objDist2, objDist1, intersect) + smoothFactor * intersect * (1.0 - intersect);
+}

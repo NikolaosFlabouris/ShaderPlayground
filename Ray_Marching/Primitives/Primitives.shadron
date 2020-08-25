@@ -1,0 +1,87 @@
+/// Functions for creating a variety of primitive shapes.
+
+#version 140
+
+///
+/// Distance to a sphere.
+/// \param pos - ray position in space.
+/// \param spherePos - position of sphere in space.
+/// \param sphereRadius - radius of sphere.
+/// \return - distance to sphere.
+glsl float SpherePrim(vec3 pos, vec3 spherePos, float sphereRadius)
+{
+    // Apply transformation.
+    vec3 sphereTransformed = pos - spherePos;
+
+    // Sphere is defined as a uniform distace from position.
+    float sphereDist =  length(sphereTransformed) - sphereRadius;
+    return sphereDist;
+}
+
+///
+/// Distance to a rectangular box.
+/// \param pos - ray position in space.
+/// \param rectBoxPos - position of the rectangular box in space.
+/// \param rectBoxWidths - x, y & z widths of the rectangular box.
+/// \param rectBoxRotation - local rotation.
+/// \return - distance to box.
+glsl float RectBoxPrim(vec3 pos, vec3 rectBoxPos, vec3 rectBoxWidths, mat3 rectBoxRotation)
+{
+    // Apply transformation and then rotation to centre of box.
+    vec3 rectboxTransformed = rectBoxRotation * (pos - rectBoxPos);
+    
+    // Apply width which defines the box shape.
+    vec3 rectBoxDist = abs(rectboxTransformed) - rectBoxWidths;
+    return length(max(rectBoxDist,0.0));
+}
+
+///
+/// Distance to a torus.
+/// \param pos - ray position in space.
+/// \param torusPos - position of the torus in space.
+/// \param torusRadius - inner and outer radii widths of the torus.
+/// \param torusRotation - local rotation.
+/// \return - distance to the torus.
+glsl float TorusPrim(vec3 pos, vec3 torusPos, vec2 torusRadius, mat3 torusRotation)
+{
+        // Apply transformation and then rotation to centre of torus.
+        vec3 torusTransformed = torusRotation * (pos - torusPos);
+
+        // Calculate shape based on inner and outer radii.
+        vec2 torusDist = vec2(length(torusTransformed.xz) - torusRadius.y, torusTransformed.y);
+        return length(torusDist) - torusRadius.x;
+}
+
+///
+/// Distance to a cylinder.
+/// \param pos - ray position in space.
+/// \param cylinderPos - position of the cylinder in space.
+/// \param cylinderDimensions - raidus and length of the cylinder.
+/// \param cylinderRotation - local rotation.
+/// \return - distance to the cylinder.
+glsl float CylinderPrim(vec3 pos, vec3 cylinderPos, vec2 cylinderDimensions, mat3 cylinderRotation)
+{
+        // Apply transformation and then rotation to centre of cylinder.
+        vec3 cylinderTransformed = cylinderRotation * (pos - cylinderPos);
+        // Calculate shape based on radius and length.
+        vec2 cylinderDist = abs(vec2(length(cylinderTransformed.xz), cylinderTransformed.y)) - cylinderDimensions;
+        return min(max(cylinderDist.x, cylinderDist.y), 0.0) + length(max(cylinderDist, 0.0));
+}
+
+///
+/// Distance to a cone.
+/// \param pos - ray position in space.
+/// \param conePos - position of the cone in space.
+/// \param coneLength - length of the cone.
+/// \param coneAngle - internal angle of the cone.
+/// \param coneRotation - local rotation.
+/// \return - distance to the cone.
+glsl float ConePrim(vec3 pos, vec3 conePos, float coneLength, float coneAngle, mat3 coneRotation)
+{
+        // Sine and Cosine of internal angle.
+        vec2 coneSCAngles = vec2(sin(coneAngle), cos(coneAngle));
+        // Apply transformation and then rotation to centre of cylinder.
+        vec3 coneTransformed = coneRotation * (pos - conePos);
+        // Calculate shape based on radius and length.
+        return dot(coneSCAngles, vec2(length(coneTransformed.xy), coneTransformed.z));
+}

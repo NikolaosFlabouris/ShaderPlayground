@@ -4,8 +4,8 @@
 #version 140
 #include <math_constants>
 
-const int WIDTH = 1200;
-const int HEIGHT = 800;
+const int WIDTH = 1920;
+const int HEIGHT = 1080;
 const int MAX_STEPS = 100;
 const float MAX_DIST = 100.0;
 const float SURF_DIST = 0.01;
